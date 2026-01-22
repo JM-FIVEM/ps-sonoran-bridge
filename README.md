@@ -60,7 +60,7 @@ Config.Sonoran = {
 
 Edit `ps-dispatch/server/main.lua`
 
-Replace ps-dispatch:server:notify and ps-dispatch:client:notify with this
+Replace `ps-dispatch:server:notify` and `ps-dispatch:client:notify` with this
 
 ```
 -- Events
