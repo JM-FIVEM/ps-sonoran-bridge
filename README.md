@@ -60,7 +60,7 @@ Config.Sonoran = {
 
 Edit `ps-dispatch/server/main.lua`
 
-OR DOWNLOAD MY FORK OF IT [HERE](https://github.com/JM-FIVEM/ps-dispatch)
+# ⚠ OR DOWNLOAD MY FORK OF IT [HERE](https://github.com/JM-FIVEM/ps-dispatch)
 
 Replace `ps-dispatch:server:notify` and `ps-dispatch:client:notify` with this
 
