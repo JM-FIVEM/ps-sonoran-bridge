@@ -3,7 +3,7 @@
 A simple bridge between **ps-dispatch** and **Sonoran CAD**.
 
 When a PS-Dispatch call is created, a dispatch call is created in Sonoran CAD.
-When an officer accepts a call (presses **E**), the unit is attached to the Sonoran call.
+When an officer accepts a call, the unit is attached to the Sonoran call.
 
 ---
 
@@ -25,16 +25,12 @@ If your community is not on **Plus or higher**, this resource will not work.
 - FiveM server
 - **ps-dispatch**
 - **Sonoran CAD Plus or higher**
-- Sonoran Web API enabled
 
 ---
 
 ## Installation
 
 1. Place the resource in your server:
-   ```
-   resources/[standalone]/ps-sonoran-bridge
-   ```
 
 2. Ensure it in `server.cfg`:
    ```cfg
@@ -72,6 +68,4 @@ Config.Sonoran = {
 ---
 
 ## Notes
-Created by `@johnnychillx`
-- Players must exist in Sonoran CAD for unit attachment to work.
 - Call mappings are stored in memory and reset on resource restart.
