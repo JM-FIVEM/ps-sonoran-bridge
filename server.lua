@@ -1,4 +1,14 @@
-local PS_TO_SONORAN = {} -- [psDispatchId] = sonoranCallId
+local PS_TO_SONORAN = {}
+
+local function logDebug(msg)
+  if Config.Debug then
+    print(("[ps-sonoran-bridge][DEBUG] %s"):format(msg))
+  end
+end
+
+local function logInfo(msg)
+  print(("[ps-sonoran-bridge] %s"):format(msg))
+end
 
 local function getSonoranSteamId(src)
   for _, identifier in ipairs(GetPlayerIdentifiers(src)) do
@@ -17,16 +27,30 @@ end
 
 local function httpPostJson(url, payload, cb)
   local body = json.encode(payload)
-  print(("[ps-sonoran-bridge] POST %s"):format(url))
-  print(("[ps-sonoran-bridge] payload=%s"):format(body))
+
+  logDebug(("POST %s"):format(url))
+  logDebug(("payload=%s"):format(body))
 
   PerformHttpRequest(url, function(status, resp, headers)
-    print(("[ps-sonoran-bridge] status=%s resp=%s"):format(tostring(status), tostring(resp)))
+    logDebug(("status=%s resp=%s"):format(tostring(status), tostring(resp)))
     if cb then cb(status, resp, headers) end
   end, "POST", body, {
     ["Content-Type"] = "application/json",
     ["Accept"] = "application/json",
   })
+end
+
+local function buildDescription(data)
+  local parts = {}
+
+  if data.code then parts[#parts + 1] = ("Code: %s"):format(data.code) end
+  if data.message then parts[#parts + 1] = ("Title: %s"):format(data.message) end
+  if data.information then parts[#parts + 1] = ("Info: %s"):format(data.information) end
+  if data.vehicle then parts[#parts + 1] = ("Vehicle: %s"):format(data.vehicle) end
+  if data.plate then parts[#parts + 1] = ("Plate: %s"):format(data.plate) end
+  if data.color then parts[#parts + 1] = ("Color: %s"):format(data.color) end
+
+  return table.concat(parts, " | ")
 end
 
 local function sonoranCreateFromDispatch(data)
@@ -36,71 +60,53 @@ local function sonoranCreateFromDispatch(data)
   if priority < 1 then priority = 1 end
   if priority > 3 then priority = 3 end
 
-  local descParts = {}
-  if data.code then descParts[#descParts+1] = ("Code: %s"):format(data.code) end
-  if data.message then descParts[#descParts+1] = ("Title: %s"):format(data.message) end
-  if data.information then descParts[#descParts+1] = ("Info: %s"):format(data.information) end
-  if data.vehicle then descParts[#descParts+1] = ("Vehicle: %s"):format(data.vehicle) end
-  if data.plate then descParts[#descParts+1] = ("Plate: %s"):format(data.plate) end
-  if data.color then descParts[#descParts+1] = ("Color: %s"):format(data.color) end
-  local description = table.concat(descParts, " | ")
-
-local postal = tostring(data.postal or "000")
-if postal == "" then postal = "000" end
+  local postal = tostring(data.postal or "000")
+  if postal == "" then postal = "000" end
 
   local dispatchObj = {
-  serverId = son.serverId,
-  origin = son.origin,
-  status = son.status,
-  priority = priority,
+    serverId = son.serverId,
+    origin = son.origin,
+    status = son.status,
+    priority = priority,
 
-  block = postal,                -- IMPORTANT
-  address = tostring(data.street or "Unknown"),
-  postal = postal,               -- IMPORTANT
+    block = postal,
+    postal = postal,
 
-  title = tostring(data.message or "Dispatch Call"),
-  code = tostring(data.code or data.codeName or "CALL"),
-  description = description,
+    address = tostring(data.street or "Unknown"),
+    title = tostring(data.message or "Dispatch Call"),
+    code = tostring(data.code or data.codeName or "CALL"),
+    description = buildDescription(data),
 
-  trackPrimary = false,
-  notes = {},
-  units = {}
-}
+    trackPrimary = false,
+    notes = {},
+    units = {}
+  }
 
-
-  if data.postal and tostring(data.postal) ~= "" then
-    dispatchObj.postal = tostring(data.postal)
-    dispatchObj.block = tostring(data.postal)
-  end
-
-local payload = {
-  id = son.communityId,
-  key = son.apiKey,
-  type = "NEW_DISPATCH",
-  data = { dispatchObj }
-}
-
+  local payload = {
+    id = son.communityId,
+    key = son.apiKey,
+    type = "NEW_DISPATCH",
+    data = { dispatchObj }
+  }
 
   local url = son.baseUrl .. "/emergency/new_dispatch"
 
   httpPostJson(url, payload, function(status, resp)
     if status ~= 200 then
-      print(("[ps-sonoran-bridge] NEW_DISPATCH failed ps id %s: http=%s resp=%s"):format(
-        tostring(data.id), tostring(status), tostring(resp)
-      ))
+      logInfo(("NEW_DISPATCH FAILED (PS:%s) HTTP:%s"):format(tostring(data.id), tostring(status)))
+      logDebug(("resp=%s"):format(tostring(resp)))
       return
     end
 
     local callId = parseSonoranCallId(resp)
     if not callId then
-      print(("[ps-sonoran-bridge] NEW_DISPATCH success but couldn't parse callId. ps id %s resp=%s"):format(
-        tostring(data.id), tostring(resp)
-      ))
+      logInfo(("NEW_DISPATCH PARSE FAILED (PS:%s)"):format(tostring(data.id)))
+      logDebug(("resp=%s"):format(tostring(resp)))
       return
     end
 
     PS_TO_SONORAN[data.id] = callId
-    print(("[ps-sonoran-bridge] Linked ps id %s -> sonoran callId %s"):format(tostring(data.id), tostring(callId)))
+    logInfo(("CALL CREATED [Sonoran:%s] (PS:%s)"):format(tostring(callId), tostring(data.id)))
   end)
 end
 
@@ -112,15 +118,16 @@ end)
 AddEventHandler('ps-dispatch:server:unitAttached', function(psId, src, player)
   local son = Config.Sonoran
   local callId = PS_TO_SONORAN[psId]
+
   if not callId then
-    print(("[ps-sonoran-bridge] No sonoran mapping for ps id %s"):format(tostring(psId)))
+    logInfo(("NO MAPPING (PS:%s) - call not created or resource restarted"):format(tostring(psId)))
     return
   end
 
   local steamId = getSonoranSteamId(src)
   if not steamId then
-    print(("[ps-sonoran-bridge] No steam: identifier for src %s, cannot attach to Sonoran call %s"):format(
-      tostring(src), tostring(callId)
+    logInfo(("ATTACH SKIPPED - no steam identifier (src:%s) [Sonoran:%s] (PS:%s)"):format(
+      tostring(src), tostring(callId), tostring(psId)
     ))
     return
   end
@@ -140,13 +147,14 @@ AddEventHandler('ps-dispatch:server:unitAttached', function(psId, src, player)
 
   httpPostJson(url, payload, function(status, resp)
     if status ~= 200 then
-      print(("[ps-sonoran-bridge] ATTACH_UNIT failed ps id %s sonoran %s http=%s resp=%s"):format(
-        tostring(psId), tostring(callId), tostring(status), tostring(resp)
+      logInfo(("ATTACH_UNIT FAILED [Sonoran:%s] (PS:%s) HTTP:%s"):format(
+        tostring(callId), tostring(psId), tostring(status)
       ))
+      logDebug(("resp=%s"):format(tostring(resp)))
       return
     end
-    print(("[ps-sonoran-bridge] Attached %s to Sonoran call %s (ps id %s)"):format(
-      steamId, tostring(callId), tostring(psId)
-    ))
+
+    logInfo(("UNIT ATTACHED [Sonoran:%s] (PS:%s)"):format(tostring(callId), tostring(psId)))
+    logDebug(("unit=%s src=%s"):format(tostring(steamId), tostring(src)))
   end)
 end)

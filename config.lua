@@ -1,5 +1,7 @@
 Config = {}
 
+Config.Debug = false
+
 Config.Sonoran = {
   baseUrl = "https://api.sonorancad.com",
   communityId = "",
