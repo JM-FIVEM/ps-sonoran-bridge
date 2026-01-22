@@ -58,6 +58,51 @@ Config.Sonoran = {
 }
 ```
 
+Edit `ps-dispatch/server/main.lua`
+
+Replace ps-dispatch:server:notify and ps-dispatch:client:notify with this
+
+```
+-- Events
+RegisterServerEvent('ps-dispatch:server:notify', function(data)
+    callCount = callCount + 1
+    data.id = callCount
+    data.time = os.time() * 1000
+    data.units = {}
+    data.responses = {}
+
+    if #calls > 0 then
+        if calls[#calls] == data then
+            return
+        end
+    end
+        
+    if #calls >= Config.MaxCallList then
+        table.remove(calls, 1)
+    end
+
+    calls[#calls + 1] = data
+
+    TriggerClientEvent('ps-dispatch:client:notify', -1, data)
+    TriggerEvent('ps-dispatch:server:callCreated', data)
+
+end)
+
+RegisterServerEvent('ps-dispatch:server:attach', function(id, player)
+    for i=1, #calls do
+        if calls[i]['id'] == id then
+            for j = 1, #calls[i]['units'] do
+                if calls[i]['units'][j]['citizenid'] == player.citizenid then
+                    return
+                end
+            end
+            calls[i]['units'][#calls[i]['units'] + 1] = player
+            TriggerEvent('ps-dispatch:server:unitAttached', id, source, player)
+            return
+        end
+    end
+end)
+```
 ---
 
 ## How It Works
