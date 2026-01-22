@@ -6,3 +6,7 @@ server_scripts {
     'server.lua'
   
 }
+
+dependency {
+    'ps-dispatch'
+}
